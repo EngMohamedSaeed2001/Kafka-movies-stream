@@ -1,0 +1,129 @@
+spring:
+  application:
+    name: MoviesConsumer
+  cloud:
+    function:
+      definition: otherConsumer;comedyConsumer;dramaConsumer;actionConsumer;docConsumer;adultConsumer;crimeConsumer
+
+    stream:
+      bindings:
+        otherConsumer-in-0:
+          destination: others
+        comedyConsumer-in-0:
+          destination: comedy.movies
+        dramaConsumer-in-0:
+          destination: drama.movies
+        actionConsumer-in-0:
+          destination: action.movies
+        docConsumer-in-0:
+            destination: documentary.movies
+        adultConsumer-in-0:
+          destination: adult.movies
+        crimeConsumer-in-0:
+          destination: crime.movies
+
+      kafka:
+        streams:
+          binder:
+            brokers:
+              - localhost:9092
+          bindings:
+            otherConsumer-in-0:
+              consumer:
+                configuration:
+                  state.dir: /state-log/others-consumer-log
+                  application.id: others-consumer1
+                  auto.offset.reset: earliest
+
+                  default.key.serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+                  default.value.serde: org.springframework.kafka.support.serializer.JsonSerde
+
+                  spring.json.trusted.packages: "*"
+                  spring.json.use.type.headers: false
+                  spring.json.value.default.type: com.consumer.moviesconsumer.model.Movie
+
+            comedyConsumer-in-0:
+              consumer:
+                configuration:
+                  state.dir: /state-log/comedy-consumer-log
+                  application.id: comedy-consumer1
+                  auto.offset.reset: earliest
+
+                  default.key.serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+                  default.value.serde: org.springframework.kafka.support.serializer.JsonSerde
+
+                  spring.json.trusted.packages: "*"
+                  spring.json.use.type.headers: false
+                  spring.json.value.default.type: com.consumer.moviesconsumer.model.Movie
+
+            dramaConsumer-in-0:
+              consumer:
+                configuration:
+                  state.dir: /state-log/drama-consumer-log
+                  application.id: drama-consumer1
+                  auto.offset.reset: earliest
+
+                  default.key.serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+                  default.value.serde: org.springframework.kafka.support.serializer.JsonSerde
+
+                  spring.json.trusted.packages: "*"
+                  spring.json.use.type.headers: false
+                  spring.json.value.default.type: com.consumer.moviesconsumer.model.Movie
+
+            actionConsumer-in-0:
+              consumer:
+                configuration:
+                  state.dir: /state-log/action-consumer-log
+                  application.id: action-consumer1
+                  auto.offset.reset: earliest
+
+                  default.key.serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+                  default.value.serde: org.springframework.kafka.support.serializer.JsonSerde
+
+                  spring.json.trusted.packages: "*"
+                  spring.json.use.type.headers: false
+                  spring.json.value.default.type: com.consumer.moviesconsumer.model.Movie
+
+
+            docConsumer-in-0:
+              consumer:
+                configuration:
+                  state.dir: /state-log/documentary-consumer-log
+                  application.id: documentary-consumer1
+                  auto.offset.reset: earliest
+
+                  default.key.serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+                  default.value.serde: org.springframework.kafka.support.serializer.JsonSerde
+
+                  spring.json.trusted.packages: "*"
+                  spring.json.use.type.headers: false
+                  spring.json.value.default.type: com.consumer.moviesconsumer.model.Movie
+
+
+            adultConsumer-in-0:
+              consumer:
+                configuration:
+                  state.dir: /state-log/adult-consumer-log
+                  application.id: adult-consumer1
+                  auto.offset.reset: earliest
+
+                  default.key.serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+                  default.value.serde: org.springframework.kafka.support.serializer.JsonSerde
+
+                  spring.json.trusted.packages: "*"
+                  spring.json.use.type.headers: false
+                  spring.json.value.default.type: com.consumer.moviesconsumer.model.Movie
+
+            crimeConsumer-in-0:
+              consumer:
+                configuration:
+                  state.dir: /state-log/crime-consumer-log
+                  application.id: crime-consumer1
+                  auto.offset.reset: earliest
+
+                  default.key.serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+                  default.value.serde: org.springframework.kafka.support.serializer.JsonSerde
+
+                  spring.json.trusted.packages: "*"
+                  spring.json.use.type.headers: false
+                  spring.json.value.default.type: com.consumer.moviesconsumer.model.Movie

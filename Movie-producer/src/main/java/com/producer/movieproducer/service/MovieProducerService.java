@@ -3,6 +3,7 @@ package com.producer.movieproducer.service;
 import com.producer.movieproducer.model.Movie;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +15,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -69,7 +71,10 @@ public class MovieProducerService {
 
         kafkaTemplate.executeInTransaction(kafka -> {
             System.out.println("numb = "+ j +" original size = "+batch.size());
-            batch.forEach(movie -> kafka.send(TOPIC_NAME, movie.getId(), movie));
+            batch.forEach((movie)->{
+                kafka.send(TOPIC_NAME,movie.getId() ,movie);
+            });
+
             return null;
         });
         i+=1;

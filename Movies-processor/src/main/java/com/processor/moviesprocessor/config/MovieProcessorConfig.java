@@ -13,7 +13,7 @@ import java.util.function.Function;
 @Configuration
 public class MovieProcessorConfig {
 
-    @Bean
+    @Bean(name = "movie-processor-config")
     Function<KStream<String, Movie>,KStream<String,Movie>>movieProcessor(){
         return inputStream-> new KafkaStreamBrancher<String,Movie>()
                 .branch((key,movie)-> movie.getGenres().get(0).equalsIgnoreCase("drama"),kstream->kstream.to("drama.movies"))

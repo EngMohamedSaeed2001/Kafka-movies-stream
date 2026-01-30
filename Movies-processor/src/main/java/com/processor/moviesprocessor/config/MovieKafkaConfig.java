@@ -1,5 +1,7 @@
 package com.processor.moviesprocessor.config;
 
+import com.processor.moviesprocessor.email.EmailDetails;
+import com.processor.moviesprocessor.email.EmailServiceImpl;
 import com.processor.moviesprocessor.model.Movie;
 
 
@@ -12,6 +14,9 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.*;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -38,11 +43,13 @@ public class MovieKafkaConfig {
     @Autowired
     MovieSerde movieSerde;
 
+
+
     @Bean(name = KafkaStreamsDefaultConfiguration.DEFAULT_STREAMS_CONFIG_BEAN_NAME)
     KafkaStreamsConfiguration kafkaStreamsConfiguration() {
 
         Map<String,Object> props = Map.of(
-                APPLICATION_ID_CONFIG,"movies-processor-v21",
+                APPLICATION_ID_CONFIG,"movies-processor-v26",
                 BOOTSTRAP_SERVERS_CONFIG,"localhost:9092",
                 DEFAULT_KEY_SERDE_CLASS_CONFIG,Serdes.String().getClass().getName(),
                 DEFAULT_VALUE_SERDE_CLASS_CONFIG, JacksonJsonSerde.class.getName(),
@@ -61,7 +68,11 @@ public class MovieKafkaConfig {
     KStream<String,Movie> topologyBuilder(StreamsBuilder streamsBuilder){
         //Serde<ArrayList<Movie>> movieSerdes = SerdesFactory.getSerdesUsingGenerics();
 
+        streamsBuilder.addStateStore(batchStore());
+        streamsBuilder.addStateStore(retryStore());
+
         JacksonJsonSerde<Movie> movieSerdes = movieSerde.movieSerde();
+
 
         KStream<String,Movie> inStream = streamsBuilder.stream("movies", Consumed.with(Serdes.String(),movieSerdes));
         //inStream.peek((k,v)-> System.out.println("batch ->"+v.size()));
@@ -70,6 +81,27 @@ public class MovieKafkaConfig {
 
 
         return outStream;
+    }
+
+
+
+    @Bean
+    public StoreBuilder<KeyValueStore<String, ArrayList<Movie>>> batchStore(){
+
+        return Stores.keyValueStoreBuilder(
+                Stores.persistentKeyValueStore("batch-store"),
+                Serdes.String(),
+                SerdesFactory.getSerdesUsingGenerics()
+        );
+    }
+
+    @Bean
+    public StoreBuilder<KeyValueStore<String, Integer>> retryStore(){
+        return Stores.keyValueStoreBuilder(
+                Stores.persistentKeyValueStore("retry-store"),
+                Serdes.String(),
+                Serdes.Integer()
+        );
     }
 
 

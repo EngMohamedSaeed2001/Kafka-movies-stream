@@ -1,14 +1,19 @@
 package com.processor.moviesprocessor.processor;
 
+import com.processor.moviesprocessor.email.EmailDetails;
+import com.processor.moviesprocessor.email.EmailServiceImpl;
 import com.processor.moviesprocessor.model.Movie;
 import com.processor.moviesprocessor.serdes.MovieSerde;
 import com.processor.moviesprocessor.serdes.SerdesFactory;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 
 import org.apache.kafka.streams.kstream.Suppressed;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.KafkaStreamBrancher;
@@ -18,6 +23,8 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -27,11 +34,19 @@ public class MovieProcessor {
     @Autowired
     KafkaTemplate<String,Movie> kafkaTemplate;
 
+    private KeyValueStore<String, ArrayList<Movie>> retryStore;
+    private FixedKeyProcessorContext<String, ArrayList<Movie>> context;
+
     @Autowired
     MovieSerde movieSerde;
+    @Autowired
+    EmailServiceImpl emailService;
 
-    int batchCount=0;
-    AtomicLong startTime=new AtomicLong(0);
+    List<ArrayList<Movie>> moviesBatchList =
+            Collections.synchronizedList(new ArrayList<>());
+    AtomicLong batchCount = new AtomicLong(0);
+
+    AtomicLong startTime=new AtomicLong(-1);
     AtomicBoolean rollback=new AtomicBoolean(false);
 
     public KStream<String, Movie> movieProcessor(KStream<String,Movie> inputStream) {
@@ -39,6 +54,7 @@ public class MovieProcessor {
         KStream<String, ArrayList<Movie>> batch = createBatch(inputStream,10);
 
         //System.out.println(batch);
+
 
             new KafkaStreamBrancher<String, ArrayList<Movie>>()
                     .branch((key, movie) -> hasGenre(movie,"drama"), kstream -> sendBatch(kstream,"drama.movies"))
@@ -50,6 +66,8 @@ public class MovieProcessor {
                     .defaultBranch(kstream -> sendBatch(kstream,"others"))
                     .onTopOf(batch);
 
+
+
             return inputStream;
         };
 
@@ -58,43 +76,32 @@ public class MovieProcessor {
             KStream<String, Movie> inputStream , int batchSize) {
 
 
-
-
         Serde<ArrayList<Movie>> batchSerde = SerdesFactory.getSerdesUsingGenerics();
-        ;
 
-        KStream<String, ArrayList<Movie>> aggregatedStream = inputStream
-                .peek((k,v)->{
-                    if(startTime.get()==0){
-                        startTime.set(System.currentTimeMillis());
-                        System.out.println("Stream started at: "+startTime.get());
-                    }
-                })
-                .selectKey((k,v) ->
-                        v.getGenres().getFirst().toLowerCase()
-                )
-                .groupByKey()
-                .aggregate(
-                        ArrayList::new,
-                        (key, movie, list) -> {
-                            list.add(movie);
-                            return list;
-                        },
-                        Materialized.with(Serdes.String(), batchSerde)
-                )
-                .toStream();
+        KTable<String, ArrayList<Movie>> table =
+                inputStream
+                        .peek((k,v)->{
+                            if(startTime.compareAndSet(-1, System.currentTimeMillis())){
+                                System.out.println("Stream started at: "+startTime.get());
+                            }
+                        })
+                        .selectKey((k,v)-> v.getGenres().getFirst().toLowerCase())
+                        .processValues(
+                                () -> new BatchProcessor(10),
+                                "batch-store"
+                        ).toTable(
+                                Materialized.with(Serdes.String(),batchSerde)
+                        );
 
-        KStream<String,ArrayList<Movie>>finalStream =aggregatedStream
+        KStream<String, ArrayList<Movie>> finalStream = table
+                .toStream()
+                .filter((k,v) -> v.size() >= batchSize)
                 .peek((k,v)->{
-                   batchCount++;
+                    batchCount.incrementAndGet();
                     System.out.println("Key = "+k+"V = "+v+"\n");
 
                 });
 
-        long endTime = System.currentTimeMillis();
-        System.out.println("Stream ended at: " + endTime);
-
-        System.out.println("Stream takes : " + (endTime - startTime.get()) + "mils");
 
         return finalStream;
     }
@@ -115,6 +122,11 @@ public class MovieProcessor {
             KStream<String, ArrayList<Movie>> stream,
             String topic
     ) {
+        if(rollback.get()){
+            doFailure();
+            return;
+        }
+
         stream.foreach((key, batch) -> {
 
             System.out.println(
@@ -122,19 +134,62 @@ public class MovieProcessor {
                             " size=" + batch.size()
             );
 
-            batch.forEach(movie ->
+             batch.forEach(movie ->
                     kafkaTemplate.send(topic, movie.getId(), movie)
             );
+
+             moviesBatchList.add(batch);
+
         });
     }
 
     @Scheduled(fixedRate = 30000)
     void IsStreamFinished(){
+
+        if(startTime.get() == -1){
+            return;
+        }
+
         long currentTime = System.currentTimeMillis();
-        System.out.println("batch count = "+batchCount);
-        if(Math.abs(currentTime-startTime.get())>=20000 && batchCount<10){
+        long elapsed = currentTime - startTime.get();
+
+        System.out.println("batch count = "+batchCount.get());
+
+
+        if(elapsed >= 600000 && batchCount.get() < 10){
+            rollback.set(true);
+            doFailure();
+            return;
+        }
+
+
+        if(!rollback.get() && batchCount.get() >= 10){
+            System.out.println("Start write excel file");
+            doSuccess(moviesBatchList);
             rollback.set(true);
         }
     }
+
+    void doFailure(){
+        moviesBatchList.clear();
+        rollback.set(false);
+    }
+
+    void doSuccess(List<ArrayList<Movie>> moviesData){
+        String fileName = writeExcel(moviesData);
+        sendEmail(fileName);
+    }
+
+    String writeExcel(List<ArrayList<Movie>> moviesData ){
+        Excel excel = new Excel();
+        return excel.writeMultipleBatchesToExcel(moviesData);
+    }
+    void sendEmail(String attachment){
+        String email="abdelrahmn.ahmed119@gmail.com";
+        String name =email.split("@")[0];
+        EmailDetails emailDetails =new EmailDetails(email,"Dear Mr. "+name +", this is kafka test. thanks <3","TEST-KAFKA",attachment);
+        emailService.sendMailWithAttachment(emailDetails);
+    }
+
 
 }

@@ -34,9 +34,6 @@ public class MovieProcessor {
     @Autowired
     KafkaTemplate<String,Movie> kafkaTemplate;
 
-    private KeyValueStore<String, ArrayList<Movie>> retryStore;
-    private FixedKeyProcessorContext<String, ArrayList<Movie>> context;
-
     @Autowired
     MovieSerde movieSerde;
     @Autowired

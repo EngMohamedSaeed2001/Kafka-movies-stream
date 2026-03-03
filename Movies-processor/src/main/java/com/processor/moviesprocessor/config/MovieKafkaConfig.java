@@ -43,8 +43,6 @@ public class MovieKafkaConfig {
     @Autowired
     MovieSerde movieSerde;
 
-
-
     @Bean(name = KafkaStreamsDefaultConfiguration.DEFAULT_STREAMS_CONFIG_BEAN_NAME)
     KafkaStreamsConfiguration kafkaStreamsConfiguration() {
 

@@ -10,7 +10,7 @@ import java.util.ArrayList;
 
 public class BatchProcessor implements FixedKeyProcessor<String, Movie, ArrayList<Movie>> {
 
-    private KeyValueStore<String, ArrayList<Movie>> store,retryStore;
+    private KeyValueStore<String, ArrayList<Movie>> store;
     private final int batchSize;
     private FixedKeyProcessorContext<String, ArrayList<Movie>> context;
 
